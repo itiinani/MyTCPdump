@@ -1,0 +1,244 @@
+
+To run the code run "sudo make", then "sudo ./mydump [-i interface] [-r file] [-s string] expression"
+
+Functions -
+
+mydump.c 
+
+1. Main() - It processes the command line arguments,gets the values of arguments using getArgs() method.
+            a)If -i option is used in the arguments it opens the connection on the interface mentioned and starts sniffing the packets using pcap_open_live.
+            b)If -r options is used in the arguments it opens the offline connection on the pcap file mentioned and starts reading the packets from the file.
+            c)If -s option is specified it retrieves the string mentioned after the argument and displays only those packets in which payload contains the string.
+            d)"expression" can also specified for BPF filter. pcap_compile and pcap_set_filter function will be used to set filter function and filter the packets according to it.
+            e)pcap_open_live or pcap_open_offline opens a session handle and sniffs the packet on that handle. pcap_loop sniffs packets in a loop and the packets are then passed 
+              to the callback function process_packet() where further processing takes place for each packet.
+
+2. process_packet(u_char *args, const struct pcap_pkthdr *header,const u_char *packet) -
+            a)It receives the sniffed packet one by one and retrieves the packet information to be displayed from *header fields and *packet fields.It maintains a pointer that points to first bit of packet.Initially the pointer points to ethernet header.
+            b)It retrieves timestamp from header and convert it to printable format. 
+            c)Retrieves data from ethernet header,source mac address,destination mac address,ether_type and header_len.
+            d)Shift pointer to IP header by adding ethernet header size to packet pointer and retrieve source,destination ip address,protocol type.
+            e)Shift pointer to the next header(TCP,UDP,ICMP,OTHER) and retrieve port numbers if any.
+            f)shift pointer to payload and convert it to printable format.
+            g)search for string in the payload if string is specified after -s option and display only those packets whose payload contains the string specified.
+            h)If protocol is Other than TCP,UDP or ICMP just print the raw payload after ethernet header as IP header is not present.
+            i)If protocol is TCP,UDP or ICMP print all the fields retrieved.
+
+3.int get_args(int *iflag, int *fflag, int *sflag, int* eflag, char* interface,char* fileName, char* string, char* expression, char*argv[], int argc) -
+            Function to retrieve arguments from command line and set corresponding flags.Error handling of wrong options and missing arguments.
+
+4.void printPayload(u_char* payload, int size, char* payloadNew,char* totalPayload)- 
+            convert payload to printable format with 16 bytes on each line and corresponding ASCII characters on the right.
+
+5.char *ether_ntoa_rz(const struct ether_addr *addr, char *buf) - convert ethernet address to printable format.
+
+6.void printLastLine(u_char* payload, int size, char* payloadNew,char* totalPayload) -print last line of payload which will be less than 16 bytes.
+
+
+structures.h -
+      This header file contains the structures of different headers of a packet - Ethernet header,IP header,TCP header,UDP header,ICMP header.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sample Input and Output -
+
+sudo ./mydump -i eth0 
+
+2017-10-13 20:42:49.925556 00:0c:29:32:cb:08 -> b8:af:67:63:a3:28 type 0x800 len 248 172.24.18.119:41206 -> 172.217.12.131:443 TCP
+16 03 01 00 b1 01 00 00 ad 03 03 ae 67 15 b9 f7   ............g...
+45 5a 7d ef d1 cd 26 37 66 45 98 f6 02 64 d2 c5   EZ}...&7fE...d..
+3e e3 55 ee 02 e3 c8 0f 68 85 42 00 00 2e c0 2b   >.U.....h.B....+
+c0 2f c0 0a c0 09 c0 13 c0 14 c0 12 c0 07 c0 11   ./..............
+00 33 00 32 00 45 00 39 00 38 00 88 00 16 00 2f   .3.2.E.9.8...../
+00 41 00 35 00 84 00 0a 00 05 00 04 01 00 00 56   .A.5...........V
+00 00 00 14 00 12 00 00 0f 77 77 77 2e 67 73 74   .........www.gst
+61 74 69 63 2e 63 6f 6d ff 01 00 01 00 00 0a 00   atic.com........
+08 00 06 00 17 00 18 00 19 00 0b 00 02 01 00 00   ................
+23 00 00 33 74 00 00 00 05 00 05 01 00 00 00 00   #..3t...........
+00 0d 00 12 00 10 04 01 05 01 02 01 04 03 05 03   ................
+02 03 04 02 02 02                                 ......
+2017-10-13 20:42:49.925971 b8:af:67:63:a3:28 -> 00:0c:29:32:cb:08 type 0x800 len 91 130.245.255.4:53 -> 172.24.18.119:33707 UDP
+1d 34 81 80 00 01 00 01 00 00 00 00 03 73 73 6c   .4...........ssl
+07 67 73 74 61 74 69 63 03 63 6f 6d 00 00 01 00   .gstatic.com....
+01 c0 0c 00 01 00 01 00 00 00 91 00 04 ac d9 0c   ................
+83 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sudo ./mydump -r hw1.pcap
+
+2013-01-12 09:26:16.512549 c4:3d:c7:17:6f:9b -> ff:ff:ff:ff:ff:ff type 0x806 len 60 OTHER
+c4 3d c7 17 6f 9b c0 a8 00 01 00 00 00 00 00 00   .=..o...........
+c0 a8 00 0c 00 00 00 00 00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00                                 ......
+2013-01-12 09:26:27.983870 c4:3d:c7:17:6f:9b -> 01:00:5e:7f:ff:fa type 0x800 len 395 192.168.0.1:1900 -> 239.255.255.250:1900 UDP
+4e 4f 54 49 46 59 20 2a 20 48 54 54 50 2f 31 2e   NOTIFY * HTTP/1.
+31 0d 0a 48 6f 73 74 3a 20 32 33 39 2e 32 35 35   1..Host: 239.255
+2e 32 35 35 2e 32 35 30 3a 31 39 30 30 0d 0a 43   .255.250:1900..C
+61 63 68 65 2d 43 6f 6e 74 72 6f 6c 3a 20 6d 61   ache-Control: ma
+78 2d 61 67 65 3d 36 30 0d 0a 4c 6f 63 61 74 69   x-age=60..Locati
+6f 6e 3a 20 68 74 74 70 3a 2f 2f 31 39 32 2e 31   on: http://192.1
+36 38 2e 30 2e 31 3a 31 39 30 30 2f 57 46 41 44   68.0.1:1900/WFAD
+65 76 69 63 65 2e 78 6d 6c 0d 0a 4e 54 53 3a 20   evice.xml..NTS: 
+73 73 64 70 3a 61 6c 69 76 65 0d 0a 53 65 72 76   ssdp:alive..Serv
+65 72 3a 20 50 4f 53 49 58 2c 20 55 50 6e 50 2f   er: POSIX, UPnP/
+31 2e 30 20 42 72 6f 61 64 63 6f 6d 20 55 50 6e   1.0 Broadcom UPn
+50 20 53 74 61 63 6b 2f 65 73 74 69 6d 61 74 69   P Stack/estimati
+6f 6e 20 31 2e 30 30 0d 0a 4e 54 3a 20 75 72 6e   on 1.00..NT: urn
+3a 73 63 68 65 6d 61 73 2d 77 69 66 69 61 6c 6c   :schemas-wifiall
+69 61 6e 63 65 2d 6f 72 67 3a 64 65 76 69 63 65   iance-org:device
+3a 57 46 41 44 65 76 69 63 65 3a 31 0d 0a 55 53   :WFADevice:1..US
+4e 3a 20 75 75 69 64 3a 46 35 31 39 33 39 30 41   N: uuid:F519390A
+2d 34 34 44 44 2d 32 39 35 38 2d 36 32 33 37 2d   -44DD-2958-6237-
+45 41 33 37 42 39 38 37 43 33 46 44 3a 3a 75 72   EA37B987C3FD::ur
+6e 3a 73 63 68 65 6d 61 73 2d 77 69 66 69 61 6c   n:schemas-wifial
+6c 69 61 6e 63 65 2d 6f 72 67 3a 64 65 76 69 63   liance-org:devic
+65 3a 57 46 41 44 65 76 69 63 65 3a 31 0d 0a 0d   e:WFADevice:1...
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sudo ./mydump -r hw1.pcap icmp              //BPF-filter for icmp packets
+
+2013-01-14 09:42:31.752299 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 90 1.234.31.20 -> 192.168.0.200 ICMP
+45 00 00 30 00 00 40 00 2e 06 6a 5a c0 a8 00 c8   E..0..@...jZ....
+01 ea 1f 14 00 50 7b 81 bd cd 09 c6 3a 35 22 b0   .....P{.....:5".
+70 12 39 08 11 ab 00 00 02 04 05 b4 01 01 04 02   p.9.............
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sudo ./mydump -r hw1.pcap -s google           //string filter for string "google"
+
+2013-01-13 02:36:11.638926 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:41133 -> 194.168.4.100:53 UDP
+4f 19 01 00 00 01 00 00 00 00 00 00 03 77 77 77   O............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:36:11.649312 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:41133 UDP
+4f 19 81 80 00 01 00 06 00 00 00 00 03 77 77 77   O............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 63   ..............Cc
+
+2013-01-13 02:44:43.828457 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:36998 -> 194.168.4.100:53 UDP
+75 4a 01 00 00 01 00 00 00 00 00 00 03 77 77 77   uJ...........www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:44:43.837634 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:36998 UDP
+75 4a 81 80 00 01 00 06 00 00 00 00 03 77 77 77   uJ...........www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 63   ..............Cc
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 67   ..............Cg
+
+2013-01-13 02:45:22.737738 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:45157 -> 194.168.4.100:53 UDP
+a0 c8 01 00 00 01 00 00 00 00 00 00 03 77 77 77   .............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:45:22.749729 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:45157 UDP
+a0 c8 81 80 00 01 00 06 00 00 00 00 03 77 77 77   .............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 63   ..............Cc
+
+2013-01-13 02:45:50.434713 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:57039 -> 194.168.4.100:53 UDP
+2c c6 01 00 00 01 00 00 00 00 00 00 03 77 77 77   ,............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:45:50.447340 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:57039 UDP
+2c c6 81 80 00 01 00 06 00 00 00 00 03 77 77 77   ,............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 63   ..............Cc
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 93   ..............C.
+
+2013-01-14 05:22:05.910900 44:6d:57:f6:7e:00 -> 01:00:5e:00:00:fc type 0x800 len 69 192.168.0.11:63889 -> 224.0.0.252:5355 UDP
+0a 03 00 00 00 01 00 00 00 00 00 00 09 67 6f 6f   .............goo
+67 6c 65 63 6f 6d 00 00 01 00 01                  glecom.....
+2013-01-14 05:22:06.325394 44:6d:57:f6:7e:00 -> 01:00:5e:00:00:fc type 0x800 len 69 192.168.0.11:63889 -> 224.0.0.252:5355 UDP
+0a 03 00 00 00 01 00 00 00 00 00 00 09 67 6f 6f   .............goo
+67 6c 65 63 6f 6d 00 00 01 00 01                  glecom.....
+2013-01-14 05:22:08.159485 44:6d:57:f6:7e:00 -> 01:00:5e:00:00:fc type 0x800 len 69 192.168.0.11:51854 -> 224.0.0.252:5355 UDP
+b1 c4 00 00 00 01 00 00 00 00 00 00 09 67 6f 6f   .............goo
+67 6c 65 63 6f 6d 00 00 01 00 01                  glecom.....
+2013-01-14 05:22:08.575699 44:6d:57:f6:7e:00 -> 01:00:5e:00:00:fc type 0x800 len 69 192.168.0.11:51854 -> 224.0.0.252:5355 UDP
+b1 c4 00 00 00 01 00 00 00 00 00 00 09 67 6f 6f   .............goo
+67 6c 65 63 6f 6d 00 00 01 00 01                  glecom.....
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sudo ./mydump -r hw1.pcap -s google port 53  //BPF filter + string filter
+
+2013-01-13 02:36:11.638926 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:41133 -> 194.168.4.100:53 UDP
+4f 19 01 00 00 01 00 00 00 00 00 00 03 77 77 77   O............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:36:11.649312 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:41133 UDP
+4f 19 81 80 00 01 00 06 00 00 00 00 03 77 77 77   O............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 01 02 00 04 ad c2 43 63   ..............Cc
+
+2013-01-13 02:44:43.828457 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:36998 -> 194.168.4.100:53 UDP
+75 4a 01 00 00 01 00 00 00 00 00 00 03 77 77 77   uJ...........www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:44:43.837634 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:36998 UDP
+75 4a 81 80 00 01 00 06 00 00 00 00 03 77 77 77   uJ...........www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 63   ..............Cc
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 00 1c 00 04 ad c2 43 67   ..............Cg
+
+2013-01-13 02:45:22.737738 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:45157 -> 194.168.4.100:53 UDP
+a0 c8 01 00 00 01 00 00 00 00 00 00 03 77 77 77   .............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:45:22.749729 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:45157 UDP
+a0 c8 81 80 00 01 00 06 00 00 00 00 03 77 77 77   .............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 93   ..............C.
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 01 10 00 04 ad c2 43 63   ..............Cc
+
+2013-01-13 02:45:50.434713 00:0c:29:e9:94:8e -> c4:3d:c7:17:6f:9b type 0x800 len 74 192.168.0.200:57039 -> 194.168.4.100:53 UDP
+2c c6 01 00 00 01 00 00 00 00 00 00 03 77 77 77   ,............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+
+2013-01-13 02:45:50.447340 c4:3d:c7:17:6f:9b -> 00:0c:29:e9:94:8e type 0x800 len 170 194.168.4.100:53 -> 192.168.0.200:57039 UDP
+2c c6 81 80 00 01 00 06 00 00 00 00 03 77 77 77   ,............www
+06 67 6f 6f 67 6c 65 03 63 6f 6d 00 00 01 00 01   .google.com.....
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 67   ..............Cg
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 69   ..............Ci
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 6a   ..............Cj
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 68   ..............Ch
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 63   ..............Cc
+c0 0c 00 01 00 01 00 00 00 f4 00 04 ad c2 43 93   ..............C.
+
+   
+
+                       
+
+
+
+
+
+             
+
+
+
